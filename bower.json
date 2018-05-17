@@ -1,0 +1,15 @@
+{
+  "name": "record-diff",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-prelude": "#compiler/0.12",
+    "purescript-console": "#compiler/0.12",
+    "purescript-record": "#compiler/0.12",
+    "purescript-variant": "#compiler/0.12"
+  }
+}
