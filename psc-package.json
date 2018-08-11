@@ -1,13 +1,13 @@
 {
   "name": "record-diff",
-  "set": "psc-0.11.7",
-  "source": "https://github.com/purescript/package-sets.git",
+  "set": "110818",
+  "source": "https://github.com/justinwoo/spacchetti.git",
   "depends": [
-    "record",
-    "variant",
-    "psci-support",
     "console",
-    "eff",
-    "prelude"
+    "effect",
+    "expect-inferred",
+    "prelude",
+    "record",
+    "variant"
   ]
 }

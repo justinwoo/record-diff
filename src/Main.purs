@@ -2,17 +2,20 @@ module Main where
 
 import Prelude
 
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Console (CONSOLE, log)
 import Data.List (List)
-import Data.Monoid (mempty)
-import Data.Record (get)
 import Data.Traversable (traverse_)
 import Data.Tuple (Tuple(..))
 import Data.Variant (Variant, expand, inj, match)
-import Type.Data.Boolean (class If, class Or)
+import Effect (Effect)
+import Effect.Console (log)
+import ExpectInferred (expectInferred)
+import Prim.Row as Row
+import Prim.RowList (kind RowList)
+import Prim.Symbol as Symbol
+import Record as Record
+import Type.Data.Boolean (class If)
 import Type.Data.Ordering (class Equals)
-import Type.Prelude (class CompareSymbol, class IsSymbol, class RowToList, EQ, LT, RLProxy(..), SProxy(..))
+import Type.Prelude (class IsSymbol, class RowToList, LT, Proxy(..), RLProxy(..), SProxy(..))
 import Type.Row (Cons, Nil, kind RowList)
 
 class RowListIntersection
@@ -22,29 +25,23 @@ class RowListIntersection
   | xs ys -> res
 
 instance rliNilXS :: RowListIntersection Nil (Cons name ty tail) Nil
-instance rliNilYS :: RowListIntersection (Cons name ty tail) Nil Nil
-instance rliNilNil :: RowListIntersection Nil Nil Nil
-instance rliConsCons ::
-  ( CompareSymbol xname yname ord
-  , Equals ord EQ isEq
+else instance rliNilYS :: RowListIntersection (Cons name ty tail) Nil Nil
+else instance rliNilNil :: RowListIntersection Nil Nil Nil
+else instance rliMatch ::
+  ( RowListIntersection xTail yTail tail
+  ) => RowListIntersection (Cons name ty xTail) (Cons name ty yTail) (Cons name ty tail)
+else instance rliConsCons ::
+  ( Symbol.Compare xname yname ord
   , Equals ord LT isLt
-  , Or isEq isLt isEqOrLt
-  , If isEq xty trashty yty
-  , If isEq xty trashty2 zty
-  , If isEq (SProxy xname) trashname (SProxy zname)
-  , If isEq
-      (RLProxy (Cons zname zty res'))
-      (RLProxy res')
-      (RLProxy res)
-  , If isEqOrLt
+  , If isLt
       (RLProxy xs)
       (RLProxy (Cons xname xty xs))
       (RLProxy xs')
   , If isLt
-      (RLProxy (Cons xname yty ys))
+      (RLProxy (Cons yname yty ys))
       (RLProxy ys)
       (RLProxy ys')
-  , RowListIntersection xs' ys' res'
+  , RowListIntersection xs' ys' res
   ) => RowListIntersection (Cons xname xty xs) (Cons yname yty ys) res
 
 rowListIntersection :: forall x xs y ys zs
@@ -56,17 +53,37 @@ rowListIntersection :: forall x xs y ys zs
   -> RLProxy zs
 rowListIntersection _ _ = RLProxy
 
-testA :: RLProxy (Cons "a" Int (Cons "b" Int Nil))
-testA = rowListIntersection { a: 1, b: 2 } { a: 1, b: 2 }
+testA :: Unit
+testA =
+  let
+    expected = Proxy :: Proxy (RLProxy (Cons "a" Int (Cons "b" Int Nil)))
+    actual = rowListIntersection { a: 1, b: 2 } { a: 1, b: 2 }
+  in
+    expectInferred expected actual
 
-testB :: RLProxy (Cons "a" Int (Cons "b" Int Nil))
-testB = rowListIntersection { a: 1, b: 2 } { a: 1, b: 2, c: "c" }
+testB :: Unit
+testB =
+  let
+    expected = Proxy :: Proxy (RLProxy (Cons "a" Int (Cons "b" Int Nil)))
+    actual = rowListIntersection { a: 1, b: 2 } { a: 1, b: 2, c: "c" }
+  in
+    expectInferred expected actual
 
-testC :: RLProxy (Cons "a" Int (Cons "b" Int Nil))
-testC = rowListIntersection { a: 1, b: 2, c: "c" } { a: 1, b: 2 }
+testC :: Unit
+testC =
+  let
+    expected = Proxy :: Proxy (RLProxy (Cons "a" Int (Cons "b" Int Nil)))
+    actual = rowListIntersection { a: 1, b: 2, c: "c" } { a: 1, b: 2 }
+  in
+    expectInferred expected actual
 
-testD :: RLProxy (Cons "a" Int (Cons "b" Int Nil))
-testD = rowListIntersection { a: 1, b: 2, c: "c" } { a: 1, b: 2, d: "d" }
+testD :: Unit
+testD =
+  let
+    expected = Proxy :: Proxy (RLProxy (Cons "a" Int (Cons "b" Int Nil)))
+    actual = rowListIntersection { a: 1, b: 2, c: "c" } { a: 1, b: 2, d: "d" }
+  in
+    expectInferred expected actual
 
 class RecordDiff
   (rl :: RowList) (r1 :: # Type) (r2 :: # Type) (tuples :: # Type)
@@ -79,10 +96,10 @@ instance rdNil :: RecordDiff Nil trash1 trash2 () where
 instance rdCons ::
   ( IsSymbol name
   , Eq ty
-  , RowCons name ty trash1 r1
-  , RowCons name ty trash2 r2
-  , RowCons name (Tuple ty ty) tuples' tuples
-  , Union tuples' trash tuples
+  , Row.Cons name ty trash1 r1
+  , Row.Cons name ty trash2 r2
+  , Row.Cons name (Tuple ty ty) tuples' tuples
+  , Row.Union tuples' trash tuples
   , RecordDiff tail r1 r2 tuples'
   ) => RecordDiff
          (Cons name ty tail)
@@ -93,8 +110,8 @@ instance rdCons ::
     where
       namep = SProxy :: SProxy name
       first
-        | l <- get namep r1
-        , r <- get namep r2
+        | l <- Record.get namep r1
+        , r <- Record.get namep r2
         , l /= r = pure (inj namep (Tuple l r))
         | otherwise = mempty
       rest = expand <$> recordDiff (RLProxy :: RLProxy tail) r1 r2
@@ -141,7 +158,7 @@ test4 :: List
   )
 test4 = mismatches { a: 1, b: 2, c: "c" } { a: 2, b: 2, d: "d" }
 
-main :: forall e. Eff ( console :: CONSOLE | e ) Unit
+main :: Effect Unit
 main = do
   traverse_ log' test1
   traverse_ log' test2
